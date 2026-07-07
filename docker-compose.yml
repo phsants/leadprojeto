@@ -1,0 +1,33 @@
+# Uso local opcional (na sua máquina) para testar app + Postgres juntos.
+# No EasyPanel você não usa este arquivo: cria um serviço Postgres e um App (Dockerfile).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: qualifica_leads
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@db:5432/qualifica_leads?schema=public"
+      AUTH_SECRET: "dev-secret-troque-em-producao-1234567890"
+      SEED_ADMIN_EMAIL: "admin@clinica.com"
+      SEED_ADMIN_PASSWORD: "MudarEsta@Senha123"
+      SEED_ADMIN_NAME: "Administrador"
+      RUN_SEED: "true"
+      NODE_ENV: "production"
+    ports:
+      - "3000:3000"
+
+volumes:
+  pgdata:

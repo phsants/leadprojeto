@@ -1,0 +1,125 @@
+// Prisma schema — Software de qualificação e priorização de leads
+// Baseado na seção 15 (Estrutura de banco de dados) do documento técnico-funcional.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  admin
+  equipe
+  visualizador
+}
+
+enum Classificacao {
+  A
+  B
+  C
+  D
+}
+
+model User {
+  id           String   @id @default(cuid())
+  nome         String
+  email        String   @unique
+  senhaHash    String   @map("senha_hash")
+  papel        Role     @default(equipe)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  leadsResponsavel Lead[]                @relation("LeadResponsavel")
+  statusChanges    LeadStatusHistory[]
+
+  @@map("users")
+}
+
+model Lead {
+  id String @id @default(cuid())
+
+  // Dados cadastrais
+  nome          String
+  whatsapp      String
+  email         String?
+  cidadeEstado  String? @map("cidade_estado")
+
+  // Respostas do formulário (armazenadas como códigos estáveis das opções)
+  procedimentoInteresse    String  @map("procedimento_interesse")
+  procedimentoOutro        String? @map("procedimento_outro")
+  clarezaDemanda           String  @map("clareza_demanda")
+  momentoAtual             String  @map("momento_atual")
+  tempoConsulta            String  @map("tempo_consulta")
+  tempoCirurgia            String  @map("tempo_cirurgia")
+  disponibilidadePresencial String @map("disponibilidade_presencial")
+  contatoAnterior          String  @map("contato_anterior")
+  dificuldadeDecisao       String  @map("dificuldade_decisao")
+  dificuldadeOutro         String? @map("dificuldade_outro")
+  canalOrigem              String  @map("canal_origem")
+  canalOrigemOutro         String? @map("canal_origem_outro")
+  proximoPasso             String  @map("proximo_passo")
+
+  // Resultado calculado
+  scoreTotal      Int           @map("score_total")
+  scorePercentual Float         @map("score_percentual")
+  classificacao   Classificacao
+  recomendacao    String
+  flags           String[]      @default([])
+
+  // Operacional
+  status          String   @default("novo")
+  responsavelId   String?  @map("responsavel_id")
+  responsavel     User?    @relation("LeadResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  // Consentimento / metadados
+  consentimentoContato    Boolean @map("consentimento_contato")
+  consentimentoPrivacidade Boolean @map("consentimento_privacidade")
+  origemUtm               Json?   @map("origem_utm")
+
+  observacoesInternas String? @map("observacoes_internas")
+
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  statusHistory LeadStatusHistory[]
+
+  @@index([classificacao])
+  @@index([status])
+  @@index([procedimentoInteresse])
+  @@index([canalOrigem])
+  @@index([criadoEm])
+  @@map("leads")
+}
+
+model LeadStatusHistory {
+  id             String   @id @default(cuid())
+  leadId         String   @map("lead_id")
+  lead           Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  statusAnterior String?  @map("status_anterior")
+  statusNovo     String   @map("status_novo")
+  usuarioId      String?  @map("usuario_id")
+  usuario        User?    @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  observacao     String?
+  criadoEm       DateTime @default(now()) @map("criado_em")
+
+  @@index([leadId])
+  @@map("lead_status_history")
+}
+
+// Permite alterar pesos e pontuações sem mexer no código (seção 15).
+model ScoringRule {
+  id           String   @id @default(cuid())
+  campo        String
+  resposta     String // código estável da opção
+  valor        Int
+  peso         Int
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now()) @map("criado_em")
+  atualizadoEm DateTime @updatedAt @map("atualizado_em")
+
+  @@unique([campo, resposta])
+  @@map("scoring_rules")
+}
