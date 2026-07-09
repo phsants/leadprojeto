@@ -7,11 +7,12 @@ RUN apk add --no-cache openssl libc6-compat
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
+# O postinstall roda "prisma generate", que exige o schema já presente.
+COPY prisma ./prisma
 # Sem lockfile ainda? cai para npm install.
 RUN npm ci || npm install
 
 COPY . .
-RUN npx prisma generate
 RUN npm run build
 
 # ---------- Runner ----------
