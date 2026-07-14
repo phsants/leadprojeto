@@ -104,7 +104,7 @@ export default function AssistantPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* CHAT */}
-        <div className="card flex h-[70vh] flex-col lg:col-span-2">
+        <div className="card flex h-[68vh] flex-col lg:col-span-2 lg:h-[70vh]">
           <div ref={scroller} className="flex-1 space-y-4 overflow-y-auto p-5">
             {visible.length === 0 && !loading && (
               <p className="text-sm text-ink-400">Iniciando análise dos seus leads…</p>
@@ -178,7 +178,7 @@ export default function AssistantPage() {
         </div>
 
         {/* PAINEL DE PRIORITÁRIOS (nomes reais, não passam pela IA) */}
-        <div className="card flex h-[70vh] flex-col p-5">
+        <div className="card flex max-h-[70vh] flex-col p-5 lg:h-[70vh]">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-sm font-semibold text-ink-800">Contatar agora</h2>
             <span className="badge bg-emerald-100 text-emerald-800 ring-emerald-200">
