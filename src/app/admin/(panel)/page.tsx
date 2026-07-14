@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Markdown from "@/components/Markdown";
 import { STATUS_LABEL, CLASSIFICACAO_BADGE } from "@/lib/constants";
 
 type PriorityLead = {
@@ -117,7 +118,11 @@ export default function AssistantPage() {
                       : "max-w-[90%] rounded-2xl rounded-bl-sm bg-ink-50 px-4 py-2.5 text-sm text-ink-800 ring-1 ring-ink-100"
                   }
                 >
-                  <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                  {m.role === "assistant" ? (
+                    <Markdown content={m.content} />
+                  ) : (
+                    <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                  )}
                   {m.actions
                     ?.filter((a) => a.tipo === "mudar_status")
                     .map((a, j) => (
