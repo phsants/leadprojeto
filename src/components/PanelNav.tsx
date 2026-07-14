@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 const NAV = [
-  { href: "/admin", label: "Dashboard" },
+  { href: "/admin", label: "Assistente IA" },
+  { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/leads", label: "Leads" },
   { href: "/admin/scoring-rules", label: "Pesos" },
 ];
