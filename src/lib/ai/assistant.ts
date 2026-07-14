@@ -127,11 +127,9 @@ export async function runAssistant(
       return { reply: result.text || "…", actions };
     }
 
-    // Registra o turno do modelo com as chamadas de ferramenta.
-    contents.push({
-      role: "model",
-      parts: result.functionCalls.map((fc) => ({ functionCall: fc })),
-    });
+    // Registra o turno do modelo com as partes CRUAS (preserva o
+    // thoughtSignature que os modelos novos exigem no retorno da ferramenta).
+    contents.push({ role: "model", parts: result.rawParts });
 
     const responseParts = [];
     for (const fc of result.functionCalls) {

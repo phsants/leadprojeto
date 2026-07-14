@@ -29,6 +29,7 @@ export async function POST(req: Request) {
     const friendly = msg.includes("GEMINI_API_KEY")
       ? "A chave da IA (GEMINI_API_KEY) não está configurada no servidor."
       : "Não consegui falar com a IA agora. Tente novamente em instantes.";
-    return NextResponse.json({ error: friendly }, { status: 500 });
+    // `detail` só é visível para usuários autenticados do painel (ajuda no diagnóstico).
+    return NextResponse.json({ error: friendly, detail: msg }, { status: 500 });
   }
 }

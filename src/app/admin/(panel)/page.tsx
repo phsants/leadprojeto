@@ -76,7 +76,7 @@ export default function AssistantPage() {
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? "Erro ao consultar a IA.");
+        setError([data.error, data.detail].filter(Boolean).join(" — ") || "Erro ao consultar a IA.");
         setLoading(false);
         return;
       }

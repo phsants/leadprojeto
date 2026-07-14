@@ -24,6 +24,9 @@ export type FunctionDeclaration = {
 export type GeminiResult = {
   text: string;
   functionCalls: { name: string; args: Record<string, unknown> }[];
+  // Partes cruas da resposta do modelo — devem ser reenviadas VERBATIM no
+  // próximo turno (carregam o thoughtSignature exigido pelos modelos novos).
+  rawParts: Part[];
 };
 
 export async function generateContent(opts: {
@@ -33,7 +36,7 @@ export async function generateContent(opts: {
 }): Promise<GeminiResult> {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error("GEMINI_API_KEY não configurada.");
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-flash-latest";
 
   const body: Record<string, unknown> = {
     systemInstruction: { parts: [{ text: opts.system }] },
@@ -54,7 +57,14 @@ export async function generateContent(opts: {
 
   if (!res.ok) {
     const errText = await res.text();
-    throw new Error(`Gemini ${res.status}: ${errText.slice(0, 600)}`);
+    let detail = errText.slice(0, 600);
+    try {
+      const j = JSON.parse(errText);
+      if (j?.error?.message) detail = `${j.error.status ?? ""} ${j.error.message}`.trim();
+    } catch {
+      /* mantém o texto cru */
+    }
+    throw new Error(`Gemini ${res.status} (modelo: ${model}): ${detail}`);
   }
 
   const data = await res.json();
@@ -71,5 +81,5 @@ export async function generateContent(opts: {
     )
     .map((p) => ({ name: p.functionCall.name, args: p.functionCall.args ?? {} }));
 
-  return { text, functionCalls };
+  return { text, functionCalls, rawParts: parts };
 }
