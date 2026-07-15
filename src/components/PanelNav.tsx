@@ -7,7 +7,7 @@ const NAV = [
   { href: "/admin", label: "Assistente IA" },
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/leads", label: "Leads" },
-  { href: "/admin/scoring-rules", label: "Pesos" },
+  { href: "/admin/scoring-rules", label: "Pontuação" },
 ];
 
 function NavLinks({ pathname }: { pathname: string }) {

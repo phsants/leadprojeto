@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import { QUESTIONS, getOptionLabel } from "@/lib/form-schema";
 import { CLASSIFICACAO_BADGE, STATUS_LABEL, STATUSES, FLAG_LABEL } from "@/lib/constants";
@@ -53,6 +53,37 @@ export default function LeadsPage() {
 
   const set = (k: keyof typeof filters, v: string) => setFilters((f) => ({ ...f, [k]: v }));
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function onImportFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite reimportar o mesmo arquivo
+    if (!file) return;
+    setImporting(true);
+    setImportMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/admin/import", { method: "POST", body: fd });
+      const d = await res.json();
+      if (!res.ok) {
+        setImportMsg({ ok: false, text: d.error || "Falha ao importar." });
+      } else {
+        let text = `${d.imported} cadastro(s) importado(s) de ${d.totalRows} linha(s).`;
+        if (d.ignoredColumns?.length)
+          text += ` Colunas não reconhecidas (ignoradas): ${d.ignoredColumns.join(", ")}.`;
+        setImportMsg({ ok: true, text });
+        load();
+      }
+    } catch {
+      setImportMsg({ ok: false, text: "Erro de conexão ao importar." });
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -60,13 +91,47 @@ export default function LeadsPage() {
           <h1 className="text-2xl font-semibold text-ink-900">Leads</h1>
           <p className="text-sm text-ink-500">{leads.length} resultado(s)</p>
         </div>
-        <a href="/api/admin/export" className="btn-ghost">
-          <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
-          </svg>
-          Exportar CSV
-        </a>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={onImportFile}
+          />
+          <button
+            className="btn-primary"
+            onClick={() => fileRef.current?.click()}
+            disabled={importing}
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M7.5 7.5 12 3m0 0 4.5 4.5M12 3v13.5" />
+            </svg>
+            {importing ? "Importando..." : "Importar CSV"}
+          </button>
+          <a href="/api/admin/import/template" className="btn-ghost text-xs">
+            Baixar modelo
+          </a>
+          <a href="/api/admin/export" className="btn-ghost">
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            Exportar CSV
+          </a>
+        </div>
       </div>
+
+      {importMsg && (
+        <div
+          className={`rounded-xl px-4 py-3 text-sm ring-1 ${
+            importMsg.ok
+              ? "bg-emerald-50 text-emerald-800 ring-emerald-100"
+              : "bg-rose-50 text-rose-700 ring-rose-100"
+          }`}
+        >
+          {importMsg.text}
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="card grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-6">

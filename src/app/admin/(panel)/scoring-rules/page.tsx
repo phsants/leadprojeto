@@ -1,123 +1,77 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { getQuestion, getOptionLabel, SCORE_MAXIMO } from "@/lib/form-schema";
+// Tela SOMENTE LEITURA do mapeamento de pontuação. A edição de pesos foi
+// removida de propósito: o mapeamento está validado e não deve ser alterado
+// por engano (fonte da verdade em src/lib/form-schema.ts).
 
-type Rule = {
-  id: string;
-  campo: string;
-  resposta: string;
-  valor: number;
-  peso: number;
-  ativo: boolean;
-};
+import { QUESTIONS, SCORED_QUESTIONS, SCORE_MAXIMO } from "@/lib/form-schema";
 
-export default function ScoringRulesPage() {
-  const [rules, setRules] = useState<Rule[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/admin/scoring-rules")
-      .then((r) => r.json())
-      .then((d) => setRules(d.rules ?? []))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const grupos = useMemo(() => {
-    const by: Record<string, Rule[]> = {};
-    for (const r of rules) (by[r.campo] ??= []).push(r);
-    return Object.entries(by);
-  }, [rules]);
-
-  function updateValor(id: string, valor: number) {
-    setRules((rs) => rs.map((r) => (r.id === id ? { ...r, valor } : r)));
-  }
-  function updatePeso(campo: string, peso: number) {
-    setRules((rs) => rs.map((r) => (r.campo === campo ? { ...r, peso } : r)));
-  }
-
-  async function save() {
-    setSaving(true);
-    setMsg(null);
-    const res = await fetch("/api/admin/scoring-rules", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        rules: rules.map((r) => ({ id: r.id, valor: r.valor, peso: r.peso, ativo: r.ativo })),
-      }),
-    });
-    setSaving(false);
-    if (res.ok) setMsg("Pesos atualizados com sucesso.");
-    else {
-      const d = await res.json().catch(() => ({}));
-      setMsg(d.error || "Falha ao salvar (apenas administradores podem alterar).");
-    }
-  }
-
-  if (loading) return <p className="text-ink-500">Carregando...</p>;
+export default function ScoringMapPage() {
+  const naoPontuam = QUESTIONS.filter((q) => !q.pontua);
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-ink-900">Configuração de pesos</h1>
-          <p className="text-sm text-ink-500">
-            Altere pesos e valores sem mexer no código. Score máximo atual de referência: {SCORE_MAXIMO} pontos.
-          </p>
-        </div>
-        <button onClick={save} disabled={saving} className="btn-primary">
-          {saving ? "Salvando..." : "Salvar alterações"}
-        </button>
+      <div>
+        <h1 className="text-2xl font-semibold text-ink-900">Mapeamento de pontuação</h1>
+        <p className="text-sm text-ink-500">
+          Como cada resposta soma pontos. Configuração fixa e validada — score máximo de{" "}
+          <span className="font-semibold text-ink-700">{SCORE_MAXIMO} pontos</span> (100%).
+        </p>
       </div>
 
-      {msg && (
-        <p className="rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-700 ring-1 ring-brand-100">{msg}</p>
-      )}
+      <div className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-100">
+        <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 shrink-0" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008M9.9 3.6l-6.3 10.9A2 2 0 0 0 5.3 17.5h13.4a2 2 0 0 0 1.7-3L14.1 3.6a2.4 2.4 0 0 0-4.2 0Z" />
+        </svg>
+        Pontuação bloqueada para edição. Assim ninguém altera os pesos por engano e o cálculo dos leads continua consistente.
+      </div>
 
       <div className="space-y-4">
-        {grupos.map(([campo, rs]) => {
-          const q = getQuestion(campo);
+        {SCORED_QUESTIONS.map((q) => {
+          const maxValor = Math.max(...q.options.map((o) => o.valor ?? 0));
           return (
-            <div key={campo} className="card p-5">
-              <div className="mb-3 flex items-center justify-between">
+            <div key={q.campo} className="card p-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
                 <h2 className="text-sm font-semibold text-ink-800">
-                  {q ? `${q.numero}. ${q.titulo}` : campo}
+                  {q.numero}. {q.titulo}
                 </h2>
-                <label className="flex items-center gap-2 text-sm text-ink-600">
-                  Peso da pergunta:
-                  <input
-                    type="number"
-                    min={0}
-                    max={10}
-                    className="input w-20 py-1.5 text-center"
-                    value={rs[0]?.peso ?? 0}
-                    onChange={(e) => updatePeso(campo, Number(e.target.value))}
-                  />
-                </label>
+                <span className="badge shrink-0 bg-brand-50 text-brand-700 ring-brand-100">
+                  Peso {q.peso} · máx {q.peso * maxValor} pts
+                </span>
               </div>
               <div className="divide-y divide-ink-50">
-                {rs
+                {q.options
                   .slice()
-                  .sort((a, b) => b.valor - a.valor)
-                  .map((r) => (
-                    <div key={r.id} className="flex items-center justify-between py-2">
-                      <span className="text-sm text-ink-600">{getOptionLabel(campo, r.resposta)}</span>
-                      <input
-                        type="number"
-                        min={0}
-                        max={10}
-                        className="input w-20 py-1.5 text-center"
-                        value={r.valor}
-                        onChange={(e) => updateValor(r.id, Number(e.target.value))}
-                      />
+                  .sort((a, b) => (b.valor ?? 0) - (a.valor ?? 0))
+                  .map((o) => (
+                    <div key={o.code} className="flex items-center justify-between gap-3 py-2">
+                      <span className="text-sm text-ink-600">{o.label}</span>
+                      <span className="flex items-center gap-3 text-sm">
+                        <span className="text-ink-400">valor {o.valor ?? 0}</span>
+                        <span className="w-16 text-right font-semibold text-ink-800">
+                          {q.peso * (o.valor ?? 0)} pts
+                        </span>
+                      </span>
                     </div>
                   ))}
               </div>
             </div>
           );
         })}
+      </div>
+
+      <div className="card p-5">
+        <h2 className="mb-1 text-sm font-semibold text-ink-800">Perguntas que não pontuam</h2>
+        <p className="mb-3 text-xs text-ink-400">
+          Usadas apenas para segmentação e análise — não entram no cálculo do score.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {naoPontuam.map((q) => (
+            <span key={q.campo} className="badge bg-ink-100 text-ink-600 ring-ink-200">
+              {q.numero}. {q.titulo}
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   );

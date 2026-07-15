@@ -50,8 +50,8 @@ export async function GET(req: Request) {
   const leads = await prisma.lead.findMany({
     where,
     include: { responsavel: { select: { id: true, nome: true } } },
-    // Ordenação padrão (seção 12.1): Lead A primeiro, mais recente antes.
-    orderBy: [{ classificacao: "asc" }, { criadoEm: "desc" }],
+    // Ordenação padrão: maior score primeiro, depois mais recente.
+    orderBy: [{ scorePercentual: "desc" }, { criadoEm: "desc" }],
     take: 500,
   });
 
