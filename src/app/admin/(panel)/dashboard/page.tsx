@@ -25,7 +25,13 @@ type Dashboard = {
   taxas: { querAgendar: number; apenasInfo: number; semContato: number };
 };
 
-const CLASS_COLORS: Record<string, string> = { A: "#059669", B: "#0284c7", C: "#d97706", D: "#64748b" };
+const CLASS_COLORS: Record<string, string> = {
+  A: "#059669",
+  B: "#0284c7",
+  C: "#d97706",
+  D: "#64748b",
+  incompleto: "#e11d48",
+};
 
 function Kpi({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
@@ -51,7 +57,8 @@ export default function DashboardPage() {
   if (loading) return <p className="text-ink-500">Carregando...</p>;
   if (!data) return <p className="text-ink-500">Não foi possível carregar o dashboard.</p>;
 
-  const classData = ["A", "B", "C", "D"].map((c) => ({
+  const incompletos = data.porClassificacao.find((x) => x.classificacao === "incompleto")?.total ?? 0;
+  const classData = ["A", "B", "C", "D", ...(incompletos > 0 ? ["incompleto"] : [])].map((c) => ({
     name: c,
     total: data.porClassificacao.find((x) => x.classificacao === c)?.total ?? 0,
   }));
@@ -78,8 +85,12 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi label="Total de leads" value={data.total} />
-        <Kpi label="Média de score" value={`${data.mediaScore}%`} />
+        <Kpi
+          label="Total de leads"
+          value={data.total}
+          sub={incompletos > 0 ? `${incompletos} incompleto(s) sem classe A–D` : undefined}
+        />
+        <Kpi label="Média de score" value={`${data.mediaScore}%`} sub="matriz v1.0 · exclui incompletos" />
         <Kpi label="Querem agendar" value={`${data.taxas.querAgendar}%`} sub="próximo passo = agendar" />
         <Kpi label="Sem desejo de contato" value={`${data.taxas.semContato}%`} />
       </div>

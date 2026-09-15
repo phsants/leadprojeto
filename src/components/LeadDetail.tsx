@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { QUESTIONS, getOptionLabel } from "@/lib/form-schema";
 import {
+  CAMPO_LABEL,
   CLASSIFICACAO_BADGE,
   CLASSIFICACAO_LABEL,
   FLAG_LABEL,
   STATUS_LABEL,
   STATUSES,
 } from "@/lib/constants";
+import { camposFaltantes } from "@/lib/scoring";
 
 type Detalhe = {
   campo: string;
@@ -33,9 +35,20 @@ type LeadPlain = {
   canalOrigem: string;
   canalOrigemOutro: string | null;
   proximoPasso: string;
+  clarezaDemanda: string;
+  momentoAtual: string;
+  tempoConsulta: string;
+  tempoCirurgia: string;
+  disponibilidadePresencial: string;
+  contatoAnterior: string;
+  dificuldadeDecisao: string;
+  matrixVersion: string;
   scoreTotal: number;
   scorePercentual: number;
+  classificacaoPorScore: string | null;
+  /** classe FINAL (após sobrescritas) */
   classificacao: string;
+  overrideReason: string | null;
   recomendacao: string;
   flags: string[];
   status: string;
@@ -76,6 +89,28 @@ export default function LeadDetail({
 }) {
   const router = useRouter();
   const canEdit = papel !== "visualizador";
+  const incompleto = lead.classificacao === "incompleto";
+  const faltantes = incompleto
+    ? camposFaltantes({
+        nome: lead.nome === "Sem nome" ? "" : lead.nome,
+        whatsapp: lead.whatsapp,
+        consentimentoContato: lead.consentimentoContato,
+        consentimentoPrivacidade: lead.consentimentoPrivacidade,
+        answers: {
+          procedimento_interesse: lead.procedimentoInteresse,
+          clareza_demanda: lead.clarezaDemanda,
+          momento_atual: lead.momentoAtual,
+          tempo_consulta: lead.tempoConsulta,
+          tempo_cirurgia: lead.tempoCirurgia,
+          disponibilidade_presencial: lead.disponibilidadePresencial,
+          contato_anterior: lead.contatoAnterior,
+          dificuldade_decisao: lead.dificuldadeDecisao,
+          canal_origem: lead.canalOrigem,
+          proximo_passo: lead.proximoPasso,
+        },
+      })
+    : [];
+  const sobrescrito = !!lead.classificacaoPorScore && lead.classificacaoPorScore !== lead.classificacao;
 
   const [status, setStatus] = useState(lead.status);
   const [statusObs, setStatusObs] = useState("");
@@ -146,10 +181,38 @@ export default function LeadDetail({
           <div className="text-right">
             <p className="text-3xl font-semibold text-ink-900">{lead.scorePercentual}%</p>
             <p className="text-xs text-ink-400">
-              {lead.scoreTotal} de {scoreMaximo} pontos
+              {lead.scoreTotal} de {scoreMaximo} pontos{incompleto ? " (parcial)" : ""}
             </p>
+            <p className="text-xs text-ink-400">Matriz v{lead.matrixVersion}</p>
           </div>
         </div>
+
+        {/* Classe por score x classe final (seção 10) */}
+        <dl className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+          <div className="rounded-lg bg-ink-50 px-3 py-2">
+            <dt className="text-xs text-ink-400">Classe por score (faixa absoluta)</dt>
+            <dd className="font-medium text-ink-800">
+              {CLASSIFICACAO_LABEL[lead.classificacaoPorScore ?? ""] ?? "— (registro anterior à v1.0)"}
+            </dd>
+          </div>
+          <div className="rounded-lg bg-ink-50 px-3 py-2">
+            <dt className="text-xs text-ink-400">Classe final</dt>
+            <dd className="font-medium text-ink-800">{CLASSIFICACAO_LABEL[lead.classificacao] ?? lead.classificacao}</dd>
+          </div>
+        </dl>
+        {sobrescrito && (
+          <div className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 ring-1 ring-rose-100">
+            <span className="font-semibold">Regra de sobrescrita aplicada:</span>{" "}
+            {lead.overrideReason ?? "classe final difere da classe por score."}
+          </div>
+        )}
+        {incompleto && (
+          <div className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-800 ring-1 ring-rose-100">
+            <span className="font-semibold">Registro incompleto — sem classe A–D.</span> Solicitar complementação de:{" "}
+            {faltantes.map((f) => CAMPO_LABEL[f] ?? f).join(", ") || "campos obrigatórios"}.
+          </div>
+        )}
+
         {lead.flags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             {lead.flags.map((f) => (
@@ -185,7 +248,12 @@ export default function LeadDetail({
               <tbody className="divide-y divide-ink-50">
                 {detalhe.map((d) => (
                   <tr key={d.campo}>
-                    <td className="py-2 pr-3 text-ink-700">{d.titulo}</td>
+                    <td className="py-2 pr-3 text-ink-700">
+                      {d.titulo}
+                      <div className="text-xs text-ink-400">
+                        {d.resposta ? getOptionLabel(d.campo, d.resposta) : "— sem resposta —"}
+                      </div>
+                    </td>
                     <td className="py-2 text-center text-ink-500">{d.valor}</td>
                     <td className="py-2 text-center text-ink-500">{d.peso}</td>
                     <td className="py-2 text-right font-medium text-ink-900">{d.pontuacao}</td>

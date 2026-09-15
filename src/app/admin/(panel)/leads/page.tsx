@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
 import { QUESTIONS, getOptionLabel } from "@/lib/form-schema";
-import { CLASSIFICACAO_BADGE, STATUS_LABEL, STATUSES, FLAG_LABEL } from "@/lib/constants";
+import { CLASSIFICACAO_BADGE, CLASSIFICACAO_CURTA, STATUS_LABEL, STATUSES, FLAG_LABEL } from "@/lib/constants";
 
 type LeadRow = {
   id: string;
@@ -72,6 +72,8 @@ export default function LeadsPage() {
         setImportMsg({ ok: false, text: d.error || "Falha ao importar." });
       } else {
         let text = `${d.imported} cadastro(s) importado(s) de ${d.totalRows} linha(s).`;
+        if (d.incompletos)
+          text += ` ${d.incompletos} marcado(s) como "Lead incompleto" (campo obrigatório ou consentimento ausente).`;
         if (d.ignoredColumns?.length)
           text += ` Colunas não reconhecidas (ignoradas): ${d.ignoredColumns.join(", ")}.`;
         setImportMsg({ ok: true, text });
@@ -147,6 +149,7 @@ export default function LeadsPage() {
           <option value="B">Lead B</option>
           <option value="C">Lead C</option>
           <option value="D">Lead D</option>
+          <option value="incompleto">Lead incompleto</option>
         </select>
         <select className="input" value={filters.procedimento} onChange={(e) => set("procedimento", e.target.value)}>
           <option value="">Procedimento</option>
@@ -215,7 +218,9 @@ export default function LeadsPage() {
                     </td>
                     <td className="px-4 py-3 font-semibold text-ink-800">{l.scorePercentual}%</td>
                     <td className="px-4 py-3">
-                      <span className={`badge ${CLASSIFICACAO_BADGE[l.classificacao]}`}>{l.classificacao}</span>
+                      <span className={`badge ${CLASSIFICACAO_BADGE[l.classificacao]}`}>
+                        {CLASSIFICACAO_CURTA[l.classificacao] ?? l.classificacao}
+                      </span>
                     </td>
                     <td className="px-4 py-3 text-ink-600">{getOptionLabel("canal_origem", l.canalOrigem)}</td>
                     <td className="px-4 py-3 text-ink-600">{STATUS_LABEL[l.status] ?? l.status}</td>

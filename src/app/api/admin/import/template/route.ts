@@ -11,10 +11,19 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
-  const headers = ["Nome", "WhatsApp", "Email", "Cidade/Estado", ...QUESTIONS.map((q) => q.titulo)];
+  // Consentimentos são obrigatórios (seção 3): linha sem "Sim" nos dois vira "Lead incompleto".
+  const headers = [
+    "Nome",
+    "WhatsApp",
+    "Email",
+    "Cidade/Estado",
+    "Consentimento de contato",
+    "Ciência de privacidade",
+    ...QUESTIONS.map((q) => q.titulo),
+  ];
 
   // Exemplo: para perguntas pontuadas, usa a opção de maior valor; senão a 1ª.
-  const exemplo = ["Maria Exemplo", "11999998888", "maria@email.com", "São Paulo/SP"];
+  const exemplo = ["Maria Exemplo", "11999998888", "maria@email.com", "São Paulo/SP", "Sim", "Sim"];
   for (const q of QUESTIONS) {
     const best = q.pontua
       ? q.options.slice().sort((a, b) => (b.valor ?? 0) - (a.valor ?? 0))[0]

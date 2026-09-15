@@ -6,11 +6,15 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Não autenticado." }, { status: 401 });
 
+  // KPIs fora do escore (seção 12). Média de score exclui registros incompletos.
   const [total, porClassificacao, agg, porProcedimento, porCanal, porDificuldade, porStatus] =
     await Promise.all([
       prisma.lead.count(),
       prisma.lead.groupBy({ by: ["classificacao"], _count: true }),
-      prisma.lead.aggregate({ _avg: { scorePercentual: true } }),
+      prisma.lead.aggregate({
+        _avg: { scorePercentual: true },
+        where: { classificacao: { not: "incompleto" } },
+      }),
       prisma.lead.groupBy({ by: ["procedimentoInteresse"], _count: true }),
       prisma.lead.groupBy({ by: ["canalOrigem"], _count: true }),
       prisma.lead.groupBy({ by: ["dificuldadeDecisao"], _count: true }),

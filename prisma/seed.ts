@@ -1,8 +1,10 @@
 // Seed: cria o usuário admin inicial e popula a tabela scoring_rules a partir
-// da configuração (form-schema). Rode com: npm run db:seed
+// da configuração (form-schema) como registro auditável da matriz v1.0.
+// O motor NÃO lê essa tabela. Rode com: npm run db:seed
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { SCORED_QUESTIONS } from "../src/lib/form-schema";
+import { MATRIX_VERSION } from "../src/lib/scoring";
 
 const prisma = new PrismaClient();
 
@@ -26,8 +28,15 @@ async function main() {
     for (const opt of q.options) {
       await prisma.scoringRule.upsert({
         where: { campo_resposta: { campo: q.campo, resposta: opt.code } },
-        update: { valor: opt.valor ?? 0, peso: q.peso },
-        create: { campo: q.campo, resposta: opt.code, valor: opt.valor ?? 0, peso: q.peso, ativo: true },
+        update: { valor: opt.valor ?? 0, peso: q.peso, versao: MATRIX_VERSION },
+        create: {
+          versao: MATRIX_VERSION,
+          campo: q.campo,
+          resposta: opt.code,
+          valor: opt.valor ?? 0,
+          peso: q.peso,
+          ativo: true,
+        },
       });
       count++;
     }

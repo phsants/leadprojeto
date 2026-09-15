@@ -15,12 +15,31 @@ export function normalize(s: string): string {
 // Campos cadastrais (texto livre, não pontuam).
 export const CADASTRAIS = ["nome", "whatsapp", "email", "cidade_estado"] as const;
 
+// Consentimentos (obrigatórios — seção 3). Ausência => "Lead incompleto".
+export const CONSENTIMENTOS = ["consentimento_contato", "consentimento_privacidade"] as const;
+
 // Sinônimos de cabeçalho por campo (comparados já normalizados).
 const HEADER_SYNONYMS: Record<string, string[]> = {
   nome: ["nome", "nomecompleto", "paciente", "cliente", "lead", "name"],
   whatsapp: ["whatsapp", "whats", "telefone", "celular", "fone", "contato", "zap", "phone", "tel"],
   email: ["email", "mail"],
   cidade_estado: ["cidadeestado", "cidadeuf", "cidade", "uf", "estado", "municipio", "localidade"],
+  consentimento_contato: [
+    "consentimentocontato",
+    "consentimentodecontato",
+    "autorizacontato",
+    "autorizacaodecontato",
+    "aceitacontato",
+    "consentimento",
+  ],
+  consentimento_privacidade: [
+    "consentimentoprivacidade",
+    "cienciadeprivacidade",
+    "cienciaprivacidade",
+    "privacidade",
+    "lgpd",
+    "aceitaprivacidade",
+  ],
   procedimento_interesse: ["procedimento", "procedimentointeresse", "regiaodeinteresse", "interesse", "cirurgia"],
   clareza_demanda: ["clarezademanda", "clareza"],
   momento_atual: ["momentoatual", "momento"],
@@ -43,9 +62,16 @@ const FIELD_MATCHERS: { field: string; keys: Set<string> }[] = (() => {
     out.push({ field, keys });
   };
   for (const c of CADASTRAIS) add(c, HEADER_SYNONYMS[c]);
+  for (const c of CONSENTIMENTOS) add(c, HEADER_SYNONYMS[c]);
   for (const q of QUESTIONS) add(q.campo, HEADER_SYNONYMS[q.campo] ?? []);
   return out;
 })();
+
+/** Interpreta "sim/não" de uma célula de consentimento. Vazio ou não reconhecido = false. */
+export function parseBoolean(raw: string): boolean {
+  const n = normalize(raw);
+  return ["sim", "s", "yes", "y", "true", "1", "x", "ok", "aceito", "aceita", "autorizo", "autorizado"].includes(n);
+}
 
 /** Casa um cabeçalho de coluna com um campo conhecido, ou null se não reconhecer. */
 export function matchHeader(header: string): string | null {
@@ -117,6 +143,8 @@ export type ParsedLead = {
   whatsapp: string;
   email: string;
   cidade_estado: string;
+  consentimento_contato: boolean;
+  consentimento_privacidade: boolean;
   answers: Record<string, string>;
 };
 
@@ -128,17 +156,20 @@ export function rowsToLeads(headers: string[], rows: string[][]) {
 
   const leads: ParsedLead[] = rows.map((r) => {
     const cad = { nome: "", whatsapp: "", email: "", cidade_estado: "" };
+    const consent = { consentimento_contato: false, consentimento_privacidade: false };
     const answers: Record<string, string> = {};
     fieldByIndex.forEach((field, i) => {
       if (!field) return;
       const raw = (r[i] ?? "").trim();
       if ((CADASTRAIS as readonly string[]).includes(field)) {
         (cad as Record<string, string>)[field] = raw;
+      } else if ((CONSENTIMENTOS as readonly string[]).includes(field)) {
+        (consent as Record<string, boolean>)[field] = parseBoolean(raw);
       } else {
         answers[field] = matchValue(field, raw);
       }
     });
-    return { ...cad, answers };
+    return { ...cad, ...consent, answers };
   });
 
   return { leads, ignoredColumns, matchedFields: [...matchedFields] };

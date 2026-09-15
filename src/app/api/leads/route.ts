@@ -21,9 +21,9 @@ export async function POST(req: Request) {
   }
   const data = parsed.data;
 
-  // Carrega regras de pontuação do banco (fallback interno para a config)
-  const rules = await prisma.scoringRule.findMany({ where: { ativo: true } });
-  const result = computeScore(data as unknown as Record<string, string>, rules);
+  // Matriz v1.0 bloqueada: pesos/valores vêm exclusivamente de form-schema.
+  // O Zod acima já rejeita submissão pública incompleta (seção 7, passo 2).
+  const result = computeScore(data as unknown as Record<string, string>);
 
   await prisma.lead.create({
     data: {
@@ -46,9 +46,12 @@ export async function POST(req: Request) {
       canalOrigemOutro: data.canal_origem_outro || null,
       proximoPasso: data.proximo_passo,
 
+      matrixVersion: result.matrixVersion,
       scoreTotal: result.scoreTotal,
       scorePercentual: result.scorePercentual,
-      classificacao: result.classificacao,
+      classificacaoPorScore: result.classificacaoPorScore,
+      classificacao: result.classificacaoFinal,
+      overrideReason: result.overrideReason,
       recomendacao: result.recomendacao,
       flags: result.flags,
 

@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   const where: Prisma.LeadWhereInput = {};
 
   const classificacao = searchParams.get("classificacao");
-  if (classificacao && ["A", "B", "C", "D"].includes(classificacao)) {
+  if (classificacao && ["A", "B", "C", "D", "incompleto"].includes(classificacao)) {
     where.classificacao = classificacao as Prisma.LeadWhereInput["classificacao"];
   }
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { parseCsv, rowsToLeads } from "@/lib/import-map";
-import { computeScore } from "@/lib/scoring";
+import { camposFaltantes, computeScore } from "@/lib/scoring";
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -34,11 +34,19 @@ export async function POST(req: Request) {
 
   const { leads, ignoredColumns, matchedFields } = rowsToLeads(headers, rows);
 
-  // Regras de pontuação do banco (mesmo motor do formulário público).
-  const rules = await prisma.scoringRule.findMany({ where: { ativo: true } });
-
+  // Ordem obrigatória (seção 7): 1–2 validar obrigatórios/consentimentos —
+  // importação incompleta NÃO é rejeitada: recebe "Lead incompleto" (sem classe A–D).
+  let incompletos = 0;
   const data = leads.map((l) => {
-    const s = computeScore(l.answers, rules);
+    const faltantes = camposFaltantes({
+      nome: l.nome,
+      whatsapp: l.whatsapp,
+      consentimentoContato: l.consentimento_contato,
+      consentimentoPrivacidade: l.consentimento_privacidade,
+      answers: l.answers,
+    });
+    if (faltantes.length > 0) incompletos++;
+    const s = computeScore(l.answers, { camposFaltantes: faltantes });
     return {
       nome: l.nome || "Sem nome",
       whatsapp: l.whatsapp || "",
@@ -59,15 +67,18 @@ export async function POST(req: Request) {
       canalOrigemOutro: null,
       proximoPasso: l.answers.proximo_passo || "",
 
+      matrixVersion: s.matrixVersion,
       scoreTotal: s.scoreTotal,
       scorePercentual: s.scorePercentual,
-      classificacao: s.classificacao,
+      classificacaoPorScore: s.classificacaoPorScore,
+      classificacao: s.classificacaoFinal,
+      overrideReason: s.overrideReason,
       recomendacao: s.recomendacao,
       flags: s.flags,
 
       status: "novo",
-      consentimentoContato: false,
-      consentimentoPrivacidade: false,
+      consentimentoContato: l.consentimento_contato,
+      consentimentoPrivacidade: l.consentimento_privacidade,
     };
   });
 
@@ -76,6 +87,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     ok: true,
     imported: result.count,
+    incompletos,
     totalRows: rows.length,
     matchedFields,
     ignoredColumns,

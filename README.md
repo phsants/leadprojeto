@@ -18,12 +18,25 @@ equipe — sem nunca expor o score ao lead.
 
 ## Estrutura da lógica
 
-- Fórmula: `score_total = Σ (peso × valor)`, máximo **54 pontos** → percentual.
-- Classificação: **A** ≥75% · **B** 50–74% · **C** 25–49% · **D** <25%.
-- Perguntas que pontuam: Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q10. Q1 e Q9 são só segmentação/KPI.
-- Fonte única da verdade: [`src/lib/form-schema.ts`](src/lib/form-schema.ts).
-- Motor de cálculo: [`src/lib/scoring.ts`](src/lib/scoring.ts).
-- Pesos/valores ficam na tabela `scoring_rules` e podem ser editados no painel (**/admin/scoring-rules**), sem mexer no código.
+Implementa a **Matriz de classificação v1.0** (Documento técnico-funcional v2, congelada em 12/09/2026).
+
+- Fórmula: `score_total = Σ (peso × valor)` dos 8 critérios pontuados, máximo **54 pontos**.
+  O percentual (`score_total / 54`) é só exibição, com 1 casa decimal.
+- Classificação por **escore absoluto** (nunca pelo percentual):
+  **A** 41–54 · **B** 27–40 · **C** 14–26 · **D** 0–13.
+- Perguntas que pontuam: Q2, Q3, Q4, Q5, Q6, Q7, Q8, Q10. Q1 (procedimento) e Q9 (canal) são só segmentação/KPI.
+- Ordem de processamento: validar obrigatórios/consentimentos → subtotais/total → classe pelo total →
+  sobrescritas → flags → recomendação → persistir (`matrix_version`, `classificacao_por_score`,
+  `classificacao` = classe final, `override_reason`, `flags`).
+- Exceções: "não quero ser contatado" força classe final **D** (score preservado, motivo gravado);
+  flags `lead_educacional`, `baixa_disponibilidade`, `necessita_abordagem_educativa`, `avaliar_fluxo_reparador`
+  não alteram score nem classe.
+- **Lead incompleto**: formulário público rejeita submissão incompleta; importação com campo obrigatório
+  ou consentimento ausente grava `classificacao = incompleto` (sem classe A–D) e flag `registro_incompleto`.
+- Fonte única da verdade dos pesos/valores: [`src/lib/form-schema.ts`](src/lib/form-schema.ts).
+  Motor: [`src/lib/scoring.ts`](src/lib/scoring.ts). **Pesos bloqueados na v1.0**: a tabela `scoring_rules`
+  é só registro auditável (o motor não a lê); alterar exige nova versão, data, justificativa e novos testes.
+- Testes da matriz (casos-limite, sobrescrita, flags, incompleto): `npm test`.
 
 ## Rodando localmente
 

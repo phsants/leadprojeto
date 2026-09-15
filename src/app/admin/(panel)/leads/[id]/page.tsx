@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { computeScore, type Answers } from "@/lib/scoring";
+import { answersFromLead, computeScore } from "@/lib/scoring";
 import LeadDetail from "@/components/LeadDetail";
 import { getSession } from "@/lib/auth";
 
@@ -25,20 +25,9 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
     orderBy: { nome: "asc" },
   });
 
-  // Recalcula o detalhamento por pergunta (valores/pesos) para exibição.
-  const answers: Answers = {
-    procedimento_interesse: lead.procedimentoInteresse,
-    clareza_demanda: lead.clarezaDemanda,
-    momento_atual: lead.momentoAtual,
-    tempo_consulta: lead.tempoConsulta,
-    tempo_cirurgia: lead.tempoCirurgia,
-    disponibilidade_presencial: lead.disponibilidadePresencial,
-    contato_anterior: lead.contatoAnterior,
-    dificuldade_decisao: lead.dificuldadeDecisao,
-    canal_origem: lead.canalOrigem,
-    proximo_passo: lead.proximoPasso,
-  };
-  const { detalhe, scoreMaximo } = computeScore(answers);
+  // Recalcula o detalhamento por pergunta (valor, peso e subtotal) para exibição.
+  // O score/classe persistidos são os da matriz da época; o detalhe só explica o cálculo.
+  const { detalhe, scoreMaximo } = computeScore(answersFromLead(lead));
 
   // Serializa datas para o client component.
   const leadPlain = {

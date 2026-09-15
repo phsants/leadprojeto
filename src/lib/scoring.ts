@@ -1,29 +1,101 @@
 // Motor de cálculo do score, classificação, travas de exceção e recomendação.
-// Referência: seções 6 (cálculo), 7 (classificação), 8 (exceções) e 9 (recomendações).
+// Referência: Documento técnico-funcional v2 — Matriz de classificação v1.0
+// (congelada em 12/09/2026): seções 5 (cálculo), 6 (faixas), 7 (ordem de
+// processamento), 8 (exceções) e 9 (rastreabilidade).
 
 import { QUESTIONS, SCORED_QUESTIONS, SCORE_MAXIMO } from "./form-schema";
 
-export type Classificacao = "A" | "B" | "C" | "D";
+/** Versão da matriz de pontuação em vigor. Qualquer alteração de peso/valor/faixa exige nova versão. */
+export const MATRIX_VERSION = "1.0";
 
-export type ScoringRuleInput = {
-  campo: string;
-  resposta: string;
-  valor: number;
-  peso: number;
-  ativo?: boolean;
-};
+/** Classes A–D; "incompleto" = registro sem campo obrigatório (sem classe A–D). */
+export type Classificacao = "A" | "B" | "C" | "D" | "incompleto";
+export type ClasseAD = Exclude<Classificacao, "incompleto">;
 
 /** Respostas do formulário: campo -> código da opção selecionada */
 export type Answers = Record<string, string>;
 
+/**
+ * Faixas operacionais por escore ABSOLUTO (seção 6). A classe é decidida pelo
+ * total inteiro, nunca pelo percentual, para impedir divergência por arredondamento.
+ */
+export const FAIXAS: { classe: ClasseAD; min: number; max: number; nome: string }[] = [
+  { classe: "A", min: 41, max: 54, nome: "Alta prioridade" },
+  { classe: "B", min: 27, max: 40, nome: "Prioridade intermediária" },
+  { classe: "C", min: 14, max: 26, nome: "Baixa prioridade" },
+  { classe: "D", min: 0, max: 13, nome: "Informativo/não priorizado" },
+];
+
+const NOMES_CLASSIFICACAO: Record<Classificacao, string> = {
+  A: "Alta prioridade",
+  B: "Prioridade intermediária",
+  C: "Baixa prioridade",
+  D: "Informativo/não priorizado",
+  incompleto: "Lead incompleto (sem classe A–D)",
+};
+
+export function nomeClassificacao(c: Classificacao): string {
+  return NOMES_CLASSIFICACAO[c];
+}
+
+/** Classifica pelo escore absoluto (0–54). */
+export function classificar(scoreTotal: number): ClasseAD {
+  const total = Math.max(0, Math.min(SCORE_MAXIMO, Math.trunc(scoreTotal)));
+  for (const f of FAIXAS) if (total >= f.min) return f.classe;
+  return "D";
+}
+
+// ---------------------------------------------------------------------------
+// Completude (seção 7, passos 1 e 2)
+// ---------------------------------------------------------------------------
+
+export type CadastroInput = {
+  nome?: string | null;
+  whatsapp?: string | null;
+  consentimentoContato?: boolean | null;
+  consentimentoPrivacidade?: boolean | null;
+  answers: Answers;
+};
+
+/**
+ * Lista os campos obrigatórios ausentes ou inválidos. Vazio = registro completo.
+ * Obrigatórios: nome, whatsapp, os dois consentimentos e as 10 perguntas
+ * (a resposta precisa ser um código válido da pergunta).
+ */
+export function camposFaltantes(input: CadastroInput): string[] {
+  const faltam: string[] = [];
+  if (!input.nome || !input.nome.trim()) faltam.push("nome");
+  if (!input.whatsapp || !input.whatsapp.trim()) faltam.push("whatsapp");
+  if (input.consentimentoContato !== true) faltam.push("consentimento_contato");
+  if (input.consentimentoPrivacidade !== true) faltam.push("consentimento_privacidade");
+  for (const q of QUESTIONS) {
+    const code = input.answers[q.campo];
+    if (!code || !q.options.some((o) => o.code === code)) faltam.push(q.campo);
+  }
+  return faltam;
+}
+
+// ---------------------------------------------------------------------------
+// Resultado
+// ---------------------------------------------------------------------------
+
 export type ScoringResult = {
+  matrixVersion: string;
   scoreTotal: number;
   scoreMaximo: number;
+  /** percentual com 1 casa decimal — só para exibição; nunca decide a classe */
   scorePercentual: number;
-  classificacao: Classificacao;
+  /** classe calculada só pelo escore absoluto (passo 4) */
+  classificacaoPorScore: Classificacao;
+  /** classe após as regras de sobrescrita (passo 5) */
+  classificacaoFinal: Classificacao;
+  /** motivo da sobrescrita, quando classificacaoFinal difere da classe por score */
+  overrideReason: string | null;
+  /** campos obrigatórios ausentes (vazio quando o registro está completo) */
+  camposFaltantes: string[];
   flags: string[];
   recomendacao: string;
-  /** detalhamento por pergunta (para tela de detalhe) */
+  /** detalhamento por pergunta pontuada (valor, peso e subtotal) */
   detalhe: Array<{
     campo: string;
     titulo: string;
@@ -34,164 +106,181 @@ export type ScoringResult = {
   }>;
 };
 
-const NOMES_CLASSIFICACAO: Record<Classificacao, string> = {
-  A: "Alta prioridade / lead quente",
-  B: "Prioridade intermediária / lead morno",
-  C: "Baixa prioridade / lead frio",
-  D: "Informativo / não priorizar contato ativo",
-};
+export const FLAGS = {
+  registroIncompleto: "registro_incompleto",
+  naoAcionar: "nao_acionar_comercialmente",
+  educacional: "lead_educacional",
+  baixaDisponibilidade: "baixa_disponibilidade",
+  abordagemEducativa: "necessita_abordagem_educativa",
+  fluxoReparador: "avaliar_fluxo_reparador",
+} as const;
 
-export function nomeClassificacao(c: Classificacao): string {
-  return NOMES_CLASSIFICACAO[c];
-}
-
-export function classificar(percentual: number): Classificacao {
-  if (percentual >= 75) return "A";
-  if (percentual >= 50) return "B";
-  if (percentual >= 25) return "C";
-  return "D";
-}
-
-// Constrói lookups a partir das regras do banco, com fallback para a config.
-function buildLookups(rules?: ScoringRuleInput[]) {
-  const pesoPorCampo = new Map<string, number>();
-  const valorPorResposta = new Map<string, number>(); // chave: `${campo}::${resposta}`
-
-  // Base: config (fonte da verdade)
-  for (const q of SCORED_QUESTIONS) {
-    pesoPorCampo.set(q.campo, q.peso);
-    for (const opt of q.options) {
-      valorPorResposta.set(`${q.campo}::${opt.code}`, opt.valor ?? 0);
-    }
-  }
-
-  // Sobrescreve com regras ativas do banco (permite editar pesos sem código)
-  if (rules) {
-    for (const r of rules) {
-      if (r.ativo === false) continue;
-      pesoPorCampo.set(r.campo, r.peso);
-      valorPorResposta.set(`${r.campo}::${r.resposta}`, r.valor);
-    }
-  }
-
-  return { pesoPorCampo, valorPorResposta };
-}
+export const OVERRIDE_NAO_CONTATO =
+  "Próximo passo = não quer ser contatado: classe final sobrescrita para Lead D (regra de exceção 3). Score calculado preservado para auditoria.";
 
 function gerarRecomendacao(classificacao: Classificacao, flags: string[]): string {
   let base: string;
   switch (classificacao) {
     case "A":
       base =
-        "Lead com alta prontidão para consulta. Priorizar contato da equipe, oferecer horários disponíveis e conduzir para agendamento, mantendo linguagem informativa e sem prometer indicação cirúrgica ou orçamento definitivo.";
+        "Lead A — alta prioridade. Priorizar contato da equipe e oferecer horários disponíveis, mantendo linguagem informativa e sem promessa clínica ou financeira.";
       break;
     case "B":
       base =
-        "Lead com interesse relevante, mas ainda com dúvidas ou necessidade de qualificação complementar. Entrar em contato pelo WhatsApp, esclarecer principais dúvidas e avaliar possibilidade de agendamento.";
+        "Lead B — prioridade intermediária. Entrar em contato, esclarecer as principais dúvidas e avaliar possibilidade de agendamento.";
       break;
     case "C":
       base =
-        "Lead em fase inicial de decisão. Recomenda-se envio de informações gerais, conteúdo educativo e follow-up não prioritário.";
+        "Lead C — baixa prioridade. Fluxo educativo (informações gerais e conteúdo) com acompanhamento não prioritário.";
+      break;
+    case "incompleto":
+      base =
+        "Lead incompleto — registro com campo obrigatório ou consentimento ausente. Sem classe A–D: solicitar complementação dos dados antes de qualquer priorização.";
       break;
     case "D":
     default:
       base =
-        "Lead sem prontidão atual para consulta. Não priorizar atendimento humano imediato. Caso tenha autorizado contato, pode receber informação geral ou fluxo educativo.";
+        "Lead D — informativo/não priorizado. Não demandar atendimento humano imediato; conteúdo geral apenas se o contato tiver sido autorizado.";
       break;
   }
 
   const complementos: string[] = [];
-  if (flags.includes("nao_acionar_comercialmente")) {
+  if (flags.includes(FLAGS.naoAcionar)) {
     complementos.push(
-      "ATENÇÃO: lead declarou que NÃO quer ser contatado. Não realizar contato ativo nem enviar para fila de WhatsApp; apenas armazenamento interno."
+      "ATENÇÃO: lead declarou que NÃO quer ser contatado. Não inserir em fila ativa nem realizar contato comercial; respeitar o consentimento. Apenas armazenamento interno."
     );
   }
-  if (flags.includes("lead_informativo")) {
-    complementos.push("Perfil informativo/educacional: nutrição com conteúdo, sem abordagem comercial ativa.");
+  if (flags.includes(FLAGS.educacional)) {
+    complementos.push(
+      "Lead educacional (apenas pesquisando, sem pedido de contato): fluxo educacional, sem abordagem comercial ativa."
+    );
   }
-  if (flags.includes("necessita_abordagem_educativa")) {
-    complementos.push("Lead com medo/insegurança: usar abordagem acolhedora, informativa e não agressiva.");
+  if (flags.includes(FLAGS.abordagemEducativa)) {
+    complementos.push("Medo/insegurança declarados: contato acolhedor e informativo, sem pressão.");
   }
-  if (flags.includes("baixa_disponibilidade")) {
-    complementos.push("Baixa disponibilidade declarada: alinhar expectativa de agenda com a equipe.");
+  if (flags.includes(FLAGS.baixaDisponibilidade)) {
+    complementos.push(
+      "Sem disponibilidade presencial no momento (alerta operacional): alinhar expectativa de agenda com a equipe."
+    );
   }
-  if (flags.includes("avaliar_fluxo_reparador")) {
-    complementos.push("Procedimento reparador: direcionar para avaliação adequada pela equipe.");
+  if (flags.includes(FLAGS.fluxoReparador)) {
+    complementos.push("Procedimento reparador: encaminhar ao fluxo apropriado de avaliação pela equipe.");
   }
 
   return complementos.length ? `${base}\n\n${complementos.join(" ")}` : base;
 }
 
-export function computeScore(answers: Answers, rules?: ScoringRuleInput[]): ScoringResult {
-  const { pesoPorCampo, valorPorResposta } = buildLookups(rules);
+/**
+ * Executa a ordem obrigatória de processamento (seção 7):
+ *  3. oito subtotais, total e percentual;
+ *  4. classe pelo total absoluto;
+ *  5. regras de sobrescrita;
+ *  6. flags;
+ *  7. recomendação operacional.
+ * Pesos e valores vêm exclusivamente de form-schema (matriz v1.0 bloqueada).
+ *
+ * `camposFaltantes` (passos 1–2) vem de quem chama: o formulário público já
+ * rejeita submissão incompleta; a importação passa a lista para o registro
+ * receber "Lead incompleto" em vez de uma classe A–D.
+ */
+export function computeScore(answers: Answers, opts: { camposFaltantes?: string[] } = {}): ScoringResult {
+  const faltantes = opts.camposFaltantes ?? [];
 
+  // ---- 3. Subtotais ----
   let scoreTotal = 0;
   const detalhe: ScoringResult["detalhe"] = [];
-
-  for (const q of QUESTIONS) {
-    const resposta = answers[q.campo];
-    if (!q.pontua) continue;
-
-    const peso = pesoPorCampo.get(q.campo) ?? q.peso;
-    const valor = valorPorResposta.get(`${q.campo}::${resposta}`) ?? 0;
-    const pontuacao = peso * valor;
+  for (const q of SCORED_QUESTIONS) {
+    const resposta = answers[q.campo] ?? "";
+    const valor = q.options.find((o) => o.code === resposta)?.valor ?? 0;
+    const pontuacao = q.peso * valor;
     scoreTotal += pontuacao;
-
-    detalhe.push({
-      campo: q.campo,
-      titulo: q.titulo,
-      resposta,
-      valor,
-      peso,
-      pontuacao,
-    });
+    detalhe.push({ campo: q.campo, titulo: q.titulo, resposta, valor, peso: q.peso, pontuacao });
   }
-
   const scoreMaximo = SCORE_MAXIMO;
   const scorePercentual = scoreMaximo > 0 ? (scoreTotal / scoreMaximo) * 100 : 0;
 
-  let classificacao = classificar(scorePercentual);
   const flags: string[] = [];
 
-  // ---- Regras de exceção (seção 8) ----
-
-  // 8.1 Lead não quer ser contatado -> força Lead D (sobrescreve o score)
-  if (answers.proximo_passo === "nao_contatar") {
-    classificacao = "D";
-    flags.push("nao_acionar_comercialmente");
+  // ---- 1–2. Registro incompleto: sem classe A–D, sem sobrescrita ----
+  if (faltantes.length > 0) {
+    flags.push(FLAGS.registroIncompleto);
+    return {
+      matrixVersion: MATRIX_VERSION,
+      scoreTotal,
+      scoreMaximo,
+      scorePercentual: Math.round(scorePercentual * 10) / 10,
+      classificacaoPorScore: "incompleto",
+      classificacaoFinal: "incompleto",
+      overrideReason: null,
+      camposFaltantes: faltantes,
+      flags,
+      recomendacao: gerarRecomendacao("incompleto", flags),
+      detalhe,
+    };
   }
 
-  // 8.2 Lead apenas pesquisando e próximo passo não indica contato ativo
+  // ---- 4. Classe pelo total absoluto ----
+  const classificacaoPorScore = classificar(scoreTotal);
+
+  // ---- 5. Sobrescritas ----
+  let classificacaoFinal: Classificacao = classificacaoPorScore;
+  let overrideReason: string | null = null;
+  if (answers.proximo_passo === "nao_contatar") {
+    classificacaoFinal = "D";
+    overrideReason = OVERRIDE_NAO_CONTATO;
+    flags.push(FLAGS.naoAcionar);
+  }
+
+  // ---- 6. Flags (não alteram o total nem a classe) ----
   const proximoPassoAtivo = ["agendar", "whatsapp", "disponibilidade_agenda", "valores_consulta"].includes(
     answers.proximo_passo
   );
-  if (answers.momento_atual === "pesquisando" && !proximoPassoAtivo) {
-    flags.push("lead_informativo");
-  }
+  if (answers.momento_atual === "pesquisando" && !proximoPassoAtivo) flags.push(FLAGS.educacional);
+  if (answers.disponibilidade_presencial === "sem_disponibilidade") flags.push(FLAGS.baixaDisponibilidade);
+  if (answers.dificuldade_decisao === "medo_inseguranca") flags.push(FLAGS.abordagemEducativa);
+  if (answers.procedimento_interesse === "reparador") flags.push(FLAGS.fluxoReparador);
 
-  // 8.3 Baixa disponibilidade (flag, sem rebaixar score automaticamente)
-  if (answers.disponibilidade_presencial === "sem_disponibilidade") {
-    flags.push("baixa_disponibilidade");
-  }
-
-  // 8.4 Insegurança ou medo
-  if (answers.dificuldade_decisao === "medo_inseguranca") {
-    flags.push("necessita_abordagem_educativa");
-  }
-
-  // 8.5 Procedimento reparador (flag, sem reduzir score)
-  if (answers.procedimento_interesse === "reparador") {
-    flags.push("avaliar_fluxo_reparador");
-  }
-
-  const recomendacao = gerarRecomendacao(classificacao, flags);
+  // ---- 7. Recomendação ----
+  const recomendacao = gerarRecomendacao(classificacaoFinal, flags);
 
   return {
+    matrixVersion: MATRIX_VERSION,
     scoreTotal,
     scoreMaximo,
     scorePercentual: Math.round(scorePercentual * 10) / 10,
-    classificacao,
+    classificacaoPorScore,
+    classificacaoFinal,
+    overrideReason,
+    camposFaltantes: [],
     flags,
     recomendacao,
     detalhe,
+  };
+}
+
+/** Monta o mapa de respostas a partir de um registro do banco (colunas camelCase). */
+export function answersFromLead(l: {
+  procedimentoInteresse: string;
+  clarezaDemanda: string;
+  momentoAtual: string;
+  tempoConsulta: string;
+  tempoCirurgia: string;
+  disponibilidadePresencial: string;
+  contatoAnterior: string;
+  dificuldadeDecisao: string;
+  canalOrigem: string;
+  proximoPasso: string;
+}): Answers {
+  return {
+    procedimento_interesse: l.procedimentoInteresse,
+    clareza_demanda: l.clarezaDemanda,
+    momento_atual: l.momentoAtual,
+    tempo_consulta: l.tempoConsulta,
+    tempo_cirurgia: l.tempoCirurgia,
+    disponibilidade_presencial: l.disponibilidadePresencial,
+    contato_anterior: l.contatoAnterior,
+    dificuldade_decisao: l.dificuldadeDecisao,
+    canal_origem: l.canalOrigem,
+    proximo_passo: l.proximoPasso,
   };
 }

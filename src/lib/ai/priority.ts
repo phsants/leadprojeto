@@ -29,6 +29,8 @@ export async function getPriorityLeads(limit = 25): Promise<PriorityLead[]> {
   const leads = await prisma.lead.findMany({
     where: {
       scorePercentual: { gte: 70 },
+      // Lead incompleto não tem classe A–D e não entra em fila ativa.
+      classificacao: { in: ["A", "B", "C", "D"] },
       status: { in: OPEN_STATUSES },
       proximoPasso: { not: "nao_contatar" },
       NOT: { flags: { has: "nao_acionar_comercialmente" } },

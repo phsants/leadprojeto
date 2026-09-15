@@ -5,6 +5,8 @@
 // por engano (fonte da verdade em src/lib/form-schema.ts).
 
 import { QUESTIONS, SCORED_QUESTIONS, SCORE_MAXIMO } from "@/lib/form-schema";
+import { FAIXAS, MATRIX_VERSION } from "@/lib/scoring";
+import { CLASSIFICACAO_BADGE } from "@/lib/constants";
 
 export default function ScoringMapPage() {
   const naoPontuam = QUESTIONS.filter((q) => !q.pontua);
@@ -14,8 +16,36 @@ export default function ScoringMapPage() {
       <div>
         <h1 className="text-2xl font-semibold text-ink-900">Mapeamento de pontuação</h1>
         <p className="text-sm text-ink-500">
-          Como cada resposta soma pontos. Configuração fixa e validada — score máximo de{" "}
+          Matriz de classificação <span className="font-semibold text-ink-700">v{MATRIX_VERSION}</span>{" "}
+          (congelada em 12/09/2026). Como cada resposta soma pontos — score máximo de{" "}
           <span className="font-semibold text-ink-700">{SCORE_MAXIMO} pontos</span> (100%).
+        </p>
+      </div>
+
+      <div className="card p-5">
+        <h2 className="mb-1 text-sm font-semibold text-ink-800">Faixas operacionais (por escore absoluto)</h2>
+        <p className="mb-3 text-xs text-ink-400">
+          A classe é decidida pelo total inteiro de pontos, nunca pelo percentual — assim o
+          arredondamento não muda a classe. Regra de exceção: &quot;não quero ser contatado&quot; força a
+          classe final para D, preservando o score calculado.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {FAIXAS.map((f) => (
+            <div key={f.classe} className="rounded-xl bg-ink-50 px-4 py-3">
+              <span className={`badge ${CLASSIFICACAO_BADGE[f.classe]}`}>Lead {f.classe}</span>
+              <p className="mt-2 text-lg font-semibold text-ink-900">
+                {f.min}–{f.max} pts
+              </p>
+              <p className="text-xs text-ink-500">
+                {((f.min / SCORE_MAXIMO) * 100).toFixed(1)}% a {((f.max / SCORE_MAXIMO) * 100).toFixed(1)}%
+              </p>
+              <p className="mt-1 text-xs text-ink-600">{f.nome}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-ink-400">
+          Registro com campo obrigatório ou consentimento ausente (importação) recebe{" "}
+          <span className="font-medium text-ink-600">Lead incompleto</span>, sem classe A–D.
         </p>
       </div>
 
@@ -23,7 +53,8 @@ export default function ScoringMapPage() {
         <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5 shrink-0" stroke="currentColor" strokeWidth={2}>
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m0 3.75h.008M9.9 3.6l-6.3 10.9A2 2 0 0 0 5.3 17.5h13.4a2 2 0 0 0 1.7-3L14.1 3.6a2.4 2.4 0 0 0-4.2 0Z" />
         </svg>
-        Pontuação bloqueada para edição. Assim ninguém altera os pesos por engano e o cálculo dos leads continua consistente.
+        Pesos e valores bloqueados na v{MATRIX_VERSION}. Qualquer alteração exige nova versão da matriz, data,
+        justificativa e repetição dos testes — nunca altera resultados históricos.
       </div>
 
       <div className="space-y-4">

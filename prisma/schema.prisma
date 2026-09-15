@@ -16,11 +16,14 @@ enum Role {
   visualizador
 }
 
+// A–D = faixas operacionais por escore absoluto; incompleto = registro com
+// campo obrigatório/consentimento ausente (importação) — sem classe A–D.
 enum Classificacao {
   A
   B
   C
   D
+  incompleto
 }
 
 model User {
@@ -62,10 +65,16 @@ model Lead {
   canalOrigemOutro         String? @map("canal_origem_outro")
   proximoPasso             String  @map("proximo_passo")
 
-  // Resultado calculado
+  // Resultado calculado (matriz v1.0 — seção 9: rastreabilidade)
+  matrixVersion   String        @default("1.0") @map("matrix_version")
   scoreTotal      Int           @map("score_total")
   scorePercentual Float         @map("score_percentual")
+  /** classe decidida só pelo escore absoluto (antes das sobrescritas) */
+  classificacaoPorScore Classificacao? @map("classificacao_por_score")
+  /** classe FINAL (após sobrescritas). Coluna mantida como `classificacao` por compatibilidade. */
   classificacao   Classificacao
+  /** motivo da sobrescrita quando classe final != classe por score */
+  overrideReason  String?       @map("override_reason")
   recomendacao    String
   flags           String[]      @default([])
 
@@ -109,9 +118,12 @@ model LeadStatusHistory {
   @@map("lead_status_history")
 }
 
-// Permite alterar pesos e pontuações sem mexer no código (seção 15).
+// Registro auditável da matriz de pontuação (seção 11). NÃO é lida pelo motor:
+// pesos/valores vêm de src/lib/form-schema.ts (v1.0 bloqueada). Uma alteração
+// exige nova versão, data e justificativa — nunca modificar resultados históricos.
 model ScoringRule {
   id           String   @id @default(cuid())
+  versao       String   @default("1.0")
   campo        String
   resposta     String // código estável da opção
   valor        Int
