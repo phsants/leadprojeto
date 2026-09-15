@@ -5,7 +5,9 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { SessionUser } from "@/lib/auth";
 import { STATUSES } from "@/lib/constants";
-import { generateContent, type Content, type FunctionDeclaration } from "./gemini";
+import { geminiProvider, geminiConfigured } from "./gemini";
+import { groqProvider, groqConfigured } from "./groq";
+import { LlmError, type LlmProvider, type ToolDeclaration, type ToolResult, type Turn } from "./provider";
 import { getPriorityLeads, anonymize } from "./priority";
 
 export type ChatMsg = { role: "user" | "assistant"; content: string };
@@ -20,7 +22,7 @@ export type Action = {
 
 const STATUS_CODES = STATUSES.map((s) => s.code);
 
-const TOOLS: FunctionDeclaration[] = [
+const TOOLS: ToolDeclaration[] = [
   {
     name: "mudar_status",
     description:
@@ -107,44 +109,82 @@ async function buildContext(): Promise<string> {
   ].join("\n");
 }
 
+/** Cadeia de provedores: Gemini (gratuito, com retentativa) e Groq como reserva, se houver chave. */
+function providerChain(): LlmProvider[] {
+  const chain: LlmProvider[] = [];
+  if (geminiConfigured()) chain.push(geminiProvider);
+  if (groqConfigured()) chain.push(groqProvider);
+  return chain;
+}
+
+/**
+ * Chama o provedor atual; se ele falhar com erro transitório e houver reserva,
+ * passa para o próximo da cadeia (a conversa neutra segue igual).
+ */
+async function generateWithFallback(
+  chain: LlmProvider[],
+  startIdx: number,
+  opts: { system: string; turns: Turn[]; tools: ToolDeclaration[] }
+): Promise<{ result: Awaited<ReturnType<LlmProvider["generate"]>>; idx: number }> {
+  let lastErr: unknown;
+  for (let i = startIdx; i < chain.length; i++) {
+    try {
+      const result = await chain[i].generate(opts);
+      return { result, idx: i };
+    } catch (err) {
+      lastErr = err;
+      const retryable = err instanceof LlmError ? err.retryable : true;
+      const hasNext = i + 1 < chain.length;
+      if (!retryable || !hasNext) throw err;
+      console.warn(`[assistant] ${chain[i].name} indisponível (${(err as Error).message}); usando reserva ${chain[i + 1].name}.`);
+    }
+  }
+  throw lastErr ?? new LlmError("Nenhum provedor de IA configurado.", "none", null, false);
+}
+
 export async function runAssistant(
   history: ChatMsg[],
   session: SessionUser
-): Promise<{ reply: string; actions: Action[] }> {
+): Promise<{ reply: string; actions: Action[]; provider: string }> {
+  const chain = providerChain();
+  if (chain.length === 0)
+    throw new LlmError("Nenhuma chave de IA configurada (GEMINI_API_KEY ou GROQ_API_KEY).", "none", null, false);
+
   const system = buildSystem(await buildContext(), session.papel);
 
-  const contents: Content[] = history.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }],
-  }));
+  const turns: Turn[] = history.map((m) =>
+    m.role === "assistant" ? { role: "assistant", text: m.content, toolCalls: [] } : { role: "user", text: m.content }
+  );
 
   const actions: Action[] = [];
+  let idx = 0;
   // Loop de function calling: no máx. 4 rodadas para evitar laço infinito.
   for (let round = 0; round < 4; round++) {
-    const result = await generateContent({ system, contents, tools: TOOLS });
+    const { result, idx: used } = await generateWithFallback(chain, idx, { system, turns, tools: TOOLS });
+    idx = used;
 
-    if (result.functionCalls.length === 0) {
-      return { reply: result.text || "…", actions };
+    if (result.toolCalls.length === 0) {
+      return { reply: result.text || "…", actions, provider: chain[idx].name };
     }
 
-    // Registra o turno do modelo com as partes CRUAS (preserva o
-    // thoughtSignature que os modelos novos exigem no retorno da ferramenta).
-    contents.push({ role: "model", parts: result.rawParts });
+    // Registra o turno do modelo (com as partes cruas, quando o provedor as fornece).
+    turns.push({ role: "assistant", text: result.text, toolCalls: result.toolCalls, raw: result.raw });
 
-    const responseParts = [];
-    for (const fc of result.functionCalls) {
+    const results: ToolResult[] = [];
+    for (const fc of result.toolCalls) {
       const action =
         fc.name === "mudar_status"
           ? await execMudarStatus(session, fc.args)
           : ({ tipo: fc.name, leadId: "", ok: false, erro: "Ferramenta desconhecida." } as Action);
       actions.push(action);
-      responseParts.push({ functionResponse: { name: fc.name, response: { resultado: action } } });
+      results.push({ id: fc.id, name: fc.name, result: { resultado: action } });
     }
-    contents.push({ role: "user", parts: responseParts });
+    turns.push({ role: "tool", results });
   }
 
   return {
     reply: "Fiz as ações possíveis, mas a conversa ficou longa demais. Pode repetir o que faltou?",
     actions,
+    provider: chain[idx].name,
   };
 }

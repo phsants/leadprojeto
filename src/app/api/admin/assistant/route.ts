@@ -21,14 +21,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Nenhuma mensagem enviada." }, { status: 400 });
 
   try {
-    const { reply, actions } = await runAssistant(messages, session);
-    return NextResponse.json({ reply, actions });
+    const { reply, actions, provider } = await runAssistant(messages, session);
+    return NextResponse.json({ reply, actions, provider });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[assistant]", msg);
-    const friendly = msg.includes("GEMINI_API_KEY")
-      ? "A chave da IA (GEMINI_API_KEY) não está configurada no servidor."
-      : "Não consegui falar com a IA agora. Tente novamente em instantes.";
+    const friendly = msg.includes("Nenhuma chave de IA")
+      ? "Nenhuma chave de IA configurada no servidor (GEMINI_API_KEY ou GROQ_API_KEY)."
+      : "A IA ficou indisponível mesmo após várias tentativas. Tente novamente em instantes.";
     // `detail` só é visível para usuários autenticados do painel (ajuda no diagnóstico).
     return NextResponse.json({ error: friendly, detail: msg }, { status: 500 });
   }

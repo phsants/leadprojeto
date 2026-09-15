@@ -11,7 +11,7 @@
     "prisma:migrate": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:backfill": "tsx prisma/backfill-matrix-v1.ts",
-    "test": "tsx tests/scoring.test.ts",
+    "test": "tsx tests/scoring.test.ts && tsx tests/ai-providers.test.ts",
     "typecheck": "tsc --noEmit",
     "postinstall": "prisma generate"
   },

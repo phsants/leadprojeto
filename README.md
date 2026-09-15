@@ -36,7 +36,21 @@ Implementa a **Matriz de classificação v1.0** (Documento técnico-funcional v2
 - Fonte única da verdade dos pesos/valores: [`src/lib/form-schema.ts`](src/lib/form-schema.ts).
   Motor: [`src/lib/scoring.ts`](src/lib/scoring.ts). **Pesos bloqueados na v1.0**: a tabela `scoring_rules`
   é só registro auditável (o motor não a lê); alterar exige nova versão, data, justificativa e novos testes.
-- Testes da matriz (casos-limite, sobrescrita, flags, incompleto): `npm test`.
+- Testes da matriz (casos-limite, sobrescrita, flags, incompleto) e dos provedores de IA: `npm test`.
+
+## Assistente de IA (`/admin`)
+
+Chat com dados **anonimizados** dos leads e ação de mudar status por function calling.
+Provedores, em ordem ([`src/lib/ai`](src/lib/ai)):
+
+1. **Gemini** (gratuito) — `GEMINI_API_KEY`. Erros transitórios (429/5xx/rede) são retentados
+   3 vezes com espera; se o modelo principal (`GEMINI_MODEL`, padrão `gemini-flash-latest`)
+   continuar fora, usa o reserva da mesma chave (`GEMINI_FALLBACK_MODEL`, padrão `gemini-flash-lite-latest`).
+2. **Groq** (gratuito, API compatível com OpenAI) — só entra quando o Gemini esgota as tentativas.
+   Ligue com `GROQ_API_KEY` (chave em console.groq.com); modelo em `GROQ_MODEL` (padrão `llama-3.3-70b-versatile`).
+
+A conversa é mantida num formato neutro (`provider.ts`), então a troca de provedor pode acontecer
+no meio de uma sequência de ferramentas sem perder o contexto.
 
 ## Rodando localmente
 
