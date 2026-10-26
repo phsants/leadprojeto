@@ -35,6 +35,8 @@ const CLASS_COLORS: Record<string, string> = {
   incompleto: "#e11d48",
 };
 
+const pct = (n: number) => `${n.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+
 function Kpi({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <div className="card p-5">
@@ -92,9 +94,9 @@ export default function DashboardPage() {
           value={data.total}
           sub={incompletos > 0 ? `${incompletos} incompleto(s) sem classe A–D` : undefined}
         />
-        <Kpi label="Média de score" value={`${data.mediaScore}%`} sub="matriz v1.0 · exclui incompletos" />
-        <Kpi label="Querem agendar" value={`${data.taxas.querAgendar}%`} sub="próximo passo = agendar" />
-        <Kpi label="Sem desejo de contato" value={`${data.taxas.semContato}%`} />
+        <Kpi label="Média de score" value={pct(data.mediaScore)} sub="matriz v1.0 · exclui incompletos" />
+        <Kpi label="Querem agendar" value={pct(data.taxas.querAgendar)} sub="próximo passo = agendar" />
+        <Kpi label="Sem desejo de contato" value={pct(data.taxas.semContato)} />
       </div>
 
       <div>
@@ -110,17 +112,17 @@ export default function DashboardPage() {
           />
           <Kpi
             label="Agendamento"
-            value={`${data.funil.taxaAgendamento}%`}
+            value={pct(data.funil.taxaAgendamento)}
             sub={`${data.funil.agendados} de ${data.funil.base} lead(s)`}
           />
           <Kpi
             label="Comparecimento"
-            value={`${data.funil.taxaComparecimento}%`}
+            value={pct(data.funil.taxaComparecimento)}
             sub={`${data.funil.compareceram} de ${data.funil.agendados} agendado(s)`}
           />
           <Kpi
             label="Conversão"
-            value={`${data.funil.taxaConversao}%`}
+            value={pct(data.funil.taxaConversao)}
             sub="lead → consulta realizada"
           />
         </div>
