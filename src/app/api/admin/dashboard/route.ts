@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { calcularFunil } from "@/lib/kpis";
 
 export async function GET() {
   const session = await getSession();
@@ -30,6 +31,24 @@ export async function GET() {
 
   const pct = (n: number) => (total > 0 ? Math.round((n / total) * 1000) / 10 : 0);
 
+  // Funil de atendimento (tempo até o 1º contato, agendamento, comparecimento, conversão).
+  const leadsFunil = await prisma.lead.findMany({
+    select: {
+      criadoEm: true,
+      status: true,
+      classificacao: true,
+      statusHistory: { select: { statusNovo: true, criadoEm: true } },
+    },
+  });
+  const funil = calcularFunil(
+    leadsFunil.map((l) => ({
+      criadoEm: l.criadoEm,
+      status: l.status,
+      classificacao: l.classificacao,
+      historico: l.statusHistory,
+    }))
+  );
+
   return NextResponse.json({
     total,
     mediaScore: Math.round((agg._avg.scorePercentual ?? 0) * 10) / 10,
@@ -46,5 +65,6 @@ export async function GET() {
       apenasInfo: pct(apenasInfo),
       semContato: pct(semContato),
     },
+    funil,
   });
 }

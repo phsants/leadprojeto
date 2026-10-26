@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { getOptionLabel } from "@/lib/form-schema";
 import { CLASSIFICACAO_LABEL, STATUS_LABEL } from "@/lib/constants";
+import { formatarDuracao, type Funil } from "@/lib/kpis";
 
 type Dashboard = {
   total: number;
@@ -23,6 +24,7 @@ type Dashboard = {
   porDificuldade: { code: string; total: number }[];
   porStatus: { code: string; total: number }[];
   taxas: { querAgendar: number; apenasInfo: number; semContato: number };
+  funil: Funil;
 };
 
 const CLASS_COLORS: Record<string, string> = {
@@ -93,6 +95,35 @@ export default function DashboardPage() {
         <Kpi label="Média de score" value={`${data.mediaScore}%`} sub="matriz v1.0 · exclui incompletos" />
         <Kpi label="Querem agendar" value={`${data.taxas.querAgendar}%`} sub="próximo passo = agendar" />
         <Kpi label="Sem desejo de contato" value={`${data.taxas.semContato}%`} />
+      </div>
+
+      <div>
+        <h2 className="mb-1 text-sm font-semibold text-ink-800">Funil de atendimento</h2>
+        <p className="mb-3 text-xs text-ink-400">
+          Indicadores operacionais calculados pelo histórico de status. Não alteram o escore nem a classe dos leads.
+        </p>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <Kpi
+            label="Tempo até o 1º contato"
+            value={formatarDuracao(data.funil.medianaHorasPrimeiroContato)}
+            sub={`mediana · ${data.funil.contatados} lead(s) contatado(s)`}
+          />
+          <Kpi
+            label="Agendamento"
+            value={`${data.funil.taxaAgendamento}%`}
+            sub={`${data.funil.agendados} de ${data.funil.base} lead(s)`}
+          />
+          <Kpi
+            label="Comparecimento"
+            value={`${data.funil.taxaComparecimento}%`}
+            sub={`${data.funil.compareceram} de ${data.funil.agendados} agendado(s)`}
+          />
+          <Kpi
+            label="Conversão"
+            value={`${data.funil.taxaConversao}%`}
+            sub="lead → consulta realizada"
+          />
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
