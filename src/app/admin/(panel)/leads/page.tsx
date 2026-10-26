@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import Link from "next/link";
-import { QUESTIONS, getOptionLabel } from "@/lib/form-schema";
+import { QUESTIONS, SCORE_MAXIMO, getOptionLabel } from "@/lib/form-schema";
 import { CLASSIFICACAO_BADGE, CLASSIFICACAO_CURTA, STATUS_LABEL, STATUSES, FLAG_LABEL } from "@/lib/constants";
 
 type LeadRow = {
@@ -12,6 +12,7 @@ type LeadRow = {
   whatsapp: string;
   procedimentoInteresse: string;
   scorePercentual: number;
+  scoreTotal: number;
   classificacao: string;
   canalOrigem: string;
   proximoPasso: string;
@@ -216,7 +217,14 @@ export default function LeadsPage() {
                     <td className="px-4 py-3 text-ink-600">
                       {getOptionLabel("procedimento_interesse", l.procedimentoInteresse)}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-ink-800">{l.scorePercentual}%</td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <div className="font-semibold text-ink-800">
+                        {l.scoreTotal}/{SCORE_MAXIMO} pts
+                      </div>
+                      <div className="text-xs text-ink-400">
+                        {l.scorePercentual.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <span className={`badge ${CLASSIFICACAO_BADGE[l.classificacao]}`}>
                         {CLASSIFICACAO_CURTA[l.classificacao] ?? l.classificacao}

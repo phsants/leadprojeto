@@ -179,7 +179,9 @@ export default function LeadDetail({
             </p>
           </div>
           <div className="text-right">
-            <p className="text-3xl font-semibold text-ink-900">{lead.scorePercentual}%</p>
+            <p className="text-3xl font-semibold text-ink-900">
+              {lead.scorePercentual.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+            </p>
             <p className="text-xs text-ink-400">
               {lead.scoreTotal} de {scoreMaximo} pontos{incompleto ? " (parcial)" : ""}
             </p>
