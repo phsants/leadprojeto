@@ -153,14 +153,14 @@ export default function DashboardPage() {
 
         <div className="card p-5">
           <h2 className="mb-4 text-sm font-semibold text-ink-800">Origem dos leads (canais)</h2>
-          <div className="h-56">
+          <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={canalData} layout="vertical" margin={{ left: 20 }}>
+              <BarChart data={canalData} layout="vertical" margin={{ left: 10 }}>
                 <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12, fill: "#61708c" }} />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={120}
+                  width={170}
                   tick={{ fontSize: 11, fill: "#61708c" }}
                 />
                 <Tooltip formatter={(v) => [`${v} leads`, ""]} />
